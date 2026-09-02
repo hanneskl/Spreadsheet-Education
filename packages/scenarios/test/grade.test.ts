@@ -72,3 +72,63 @@ describe('re-seeding blocks tampering with the source data', () => {
     expect(grade.passed).toBe(false)
   })
 })
+
+describe('sorting is replayed server-side, never trusted as data', () => {
+  const range = {
+    start: { row: 3, col: 1, colAbs: false, rowAbs: false },
+    end: { row: 7, col: 7, colAbs: false, rowAbs: false },
+  }
+
+  it('awards the sort points when the operation is replayed onto a fresh seed', () => {
+    const grade = gradeSubmission({
+      scenarioId: 'vermoegen',
+      taskId: 'verm-sortieren',
+      inputs: {},
+      sorts: [{ range, by: 1, direction: 'asc' }],
+    })
+    expect(grade.passed).toBe(true)
+    expect(grade.points).toBe(2)
+  })
+
+  it('ignores rearranged rows sent as plain inputs', () => {
+    // A crafted request claiming the table is already sorted. The seeded cells are re-seeded,
+    // so the claim never reaches the sheet.
+    const grade = gradeSubmission({
+      scenarioId: 'vermoegen',
+      taskId: 'verm-sortieren',
+      inputs: { B4: 'Arthur', B5: 'Hannes', B6: 'Karin', B7: 'Max', B8: 'Zola' },
+    })
+    expect(grade.passed).toBe(false)
+  })
+
+  it('rejects a sort of the name column alone', () => {
+    const grade = gradeSubmission({
+      scenarioId: 'vermoegen',
+      taskId: 'verm-sortieren',
+      inputs: {},
+      sorts: [
+        {
+          range: { start: range.start, end: { row: 7, col: 1, colAbs: false, rowAbs: false } },
+          by: 1,
+          direction: 'asc',
+        },
+      ],
+    })
+    expect(grade.passed).toBe(false)
+    expect(grade.message).toContain('ganze Zeile')
+  })
+
+  it('keeps the student formulas correct after the replay', () => {
+    // Formulas were entered before sorting, so their recorded addresses are the post-sort ones.
+    const grade = gradeSubmission({
+      scenarioId: 'vermoegen',
+      taskId: 'verm-gesamt-person',
+      inputs: {
+        G4: '=SUMME(C4:F4)', G5: '=SUMME(C5:F5)', G6: '=SUMME(C6:F6)',
+        G7: '=SUMME(C7:F7)', G8: '=SUMME(C8:F8)',
+      },
+      sorts: [{ range, by: 1, direction: 'asc' }],
+    })
+    expect(grade.passed).toBe(true)
+  })
+})

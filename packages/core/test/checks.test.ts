@@ -12,6 +12,7 @@ import {
   isFormula,
   matchesSolution,
   runChecks,
+  sortedBy,
   usesFunction,
   usesOperator,
   type Check,
@@ -258,5 +259,100 @@ describe('English function names surface the German hint, not a generic message'
     )
     expect(message).toContain('Verwende')
     expect(message).not.toContain('englische')
+  })
+})
+
+/**
+ * Sorting — Quali 2025, Blatt 1: „Sortiere die Werte B4 - H8 nach Namen".
+ * The family is handed out reverse alphabetical, which is what makes it work.
+ */
+function vermoegenSheet(): Sheet {
+  const sheet = new Sheet('Tabelle1')
+  sheet.load({
+    B3: 'Name', C3: 'Sparschwein', D3: 'Bankkonto', E3: 'Geldbörse', F3: 'Sofaritze',
+    B4: 'Zola', C4: 0, D4: 0, E4: 0, F4: 100,
+    B5: 'Max', C5: 27, D5: 234, E5: 30, F5: 0,
+    B6: 'Karin', C6: 14, D6: 1421, E6: 14, F6: 0,
+    B7: 'Hannes', C7: 20, D7: 5232, E7: 221, F7: 0,
+    B8: 'Arthur', C8: 30, D8: 434, E8: 8, F8: 0,
+  })
+  return sheet
+}
+
+const wholeTable = { start: cellRef(3, 1), end: cellRef(7, 7) }
+
+function cellRef(row: number, col: number) {
+  return { row, col, colAbs: false, rowAbs: false }
+}
+
+describe('sorting moves whole rows', () => {
+  it('carries every column along and puts the names in order', () => {
+    const sheet = vermoegenSheet()
+    sheet.sortRows({ range: wholeTable, by: 1, direction: 'asc' })
+
+    expect([4, 5, 6, 7, 8].map((row) => sheet.getValue(`B${row}`)))
+      .toEqual(['Arthur', 'Hannes', 'Karin', 'Max', 'Zola'])
+    // Arthur's 434 has to travel with Arthur.
+    expect(sheet.getValue('D4')).toBe(434)
+    expect(sheet.getValue('D8')).toBe(0)
+  })
+
+  it('sorts descending too, for „nach Infizierten absteigend"', () => {
+    const sheet = vermoegenSheet()
+    sheet.sortRows({ range: wholeTable, by: 3, direction: 'desc' })
+    expect([4, 5, 6, 7, 8].map((row) => sheet.getValue(`D${row}`)))
+      .toEqual([5232, 1421, 434, 234, 0])
+  })
+
+  it('translates formulas by the distance their row moved', () => {
+    const sheet = vermoegenSheet()
+    for (const row of [4, 5, 6, 7, 8]) sheet.setInput(`G${row}`, `=SUMME(C${row}:F${row})`)
+    sheet.sortRows({ range: wholeTable, by: 1, direction: 'asc' })
+
+    // Zola's row went from 4 to 8, so her formula must have followed.
+    expect(sheet.getInput('G8')).toBe('=SUMME(C8:F8)')
+    expect(sheet.getValue('G8')).toBe(100)
+    expect(sheet.getValue('G4')).toBe(472)
+  })
+
+  it('leaves blank rows at the bottom in both directions', () => {
+    const sheet = vermoegenSheet()
+    const withBlank = { start: cellRef(3, 1), end: cellRef(8, 7) }
+    sheet.sortRows({ range: withBlank, by: 1, direction: 'desc' })
+    expect(sheet.getValue('B9')).toBeNull()
+    expect(sheet.getValue('B4')).toBe('Zola')
+  })
+})
+
+describe('sortedBy catches the classic mistake', () => {
+  const sorted = sortedBy('B4:H8', 'B', 'asc')
+
+  it('passes once the whole table is sorted', () => {
+    const sheet = vermoegenSheet()
+    sheet.sortRows({ range: wholeTable, by: 1, direction: 'asc' })
+    expect(sorted({ sheet, target: 'B4', pristine: vermoegenSheet() }).passed).toBe(true)
+  })
+
+  it('fails while the table is untouched', () => {
+    const sheet = vermoegenSheet()
+    const result = sorted({ sheet, target: 'B4', pristine: vermoegenSheet() })
+    expect(result.passed).toBe(false)
+    expect(result.message).toContain('sortiert')
+  })
+
+  it('rejects sorting only the name column, which scrambles every record', () => {
+    const sheet = vermoegenSheet()
+    // „Sortiere NUR die Namen" — the names come out right and the money is wrong.
+    sheet.sortRows({ range: { start: cellRef(3, 1), end: cellRef(7, 1) }, by: 1, direction: 'asc' })
+    const result = sorted({ sheet, target: 'B4', pristine: vermoegenSheet() })
+    expect(result.passed).toBe(false)
+    expect(result.message).toContain('ganze Zeile')
+  })
+
+  it('does not mind the columns the student computed themselves', () => {
+    const sheet = vermoegenSheet()
+    for (const row of [4, 5, 6, 7, 8]) sheet.setInput(`G${row}`, `=SUMME(C${row}:F${row})`)
+    sheet.sortRows({ range: wholeTable, by: 1, direction: 'asc' })
+    expect(sorted({ sheet, target: 'B4', pristine: vermoegenSheet() }).passed).toBe(true)
   })
 })

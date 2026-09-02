@@ -79,6 +79,20 @@ export interface CfRule {
   readonly format: Partial<Pick<CellStyle, 'bold' | 'color' | 'fill'>>
 }
 
+/**
+ * A sort the student performed (skill S2).
+ *
+ * Recorded as an *operation*, not as reordered data. The server re-seeds the scenario and
+ * replays these, so a crafted request can only say „sortiere B4:H8 nach Spalte 1 aufsteigend" —
+ * it can never hand over a table whose rows were rearranged by hand.
+ */
+export interface SortSpec {
+  readonly range: RangeRef
+  /** Absolute column index of the sort key — not an offset into the range. */
+  readonly by: number
+  readonly direction: 'asc' | 'desc'
+}
+
 export type ChartKind = 'column' | 'bar' | 'pie' | 'line' | 'area'
 
 /** Chart specification (skills D1–D11). */

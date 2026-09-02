@@ -75,8 +75,9 @@ Each entry: **ID · skill · verbatim German task sample · years observed · ch
 | S6 | Label a cell with given text | „Beschrifte Zelle H6 mit: »Gesamt«" | 21, 23 | value |
 
 > **Trap (S2).** The self-learning tool asks „Sortiere **NUR** die Namen alphabetisch" — sorting a
-> single column detaches names from their data. The trainer should teach why this destroys the
-> table and check for it explicitly.
+> single column detaches names from their data. The trainer lets a student make exactly that
+> mistake and then names the row that no longer belongs together, rather than preventing it: the
+> mistake is the lesson. Implemented — see `sortedBy` in `packages/core/src/checks.ts`.
 
 ### F — Formatting
 
@@ -173,6 +174,7 @@ Nine scenarios recur across the papers. Each should become a guided level.
 6. **Stromverbrauch** — 2026. Absolute references (`$G$2` price per kWh, `$G$3` CO₂ factor),
    aggregate block, currency format, column chart.
 7. **Vermögen** — 2025. Per-person and per-category totals, percent share, sort, merge.
+   **Shipped in full**: all nine tasks of the real paper, 21 points.
 8. **Corona** — 2020. Derived rates, aggregates, percent format, pie chart.
 9. **Probequali-Punkte** — 2019. Exam scores, totals, percent, line chart.
 
@@ -222,14 +224,16 @@ npm run dev --workspace @quali/web     # → http://localhost:5173
 Other tasks:
 
 ```bash
-npm test                               # 43 core tests
+npm test                               # 66 unit tests across core and scenarios
 npm run typecheck                      # all packages
 npm run drive --workspace @quali/web           # walk the tasks in Chromium, writes screenshots
 npm run drive:gestures --workspace @quali/web  # drag-to-fill, copy/paste, click-to-reference
 npm run drive:switching --workspace @quali/web # work survives switching scenarios
-npm run drive:formatting --workspace @quali/web# the ribbon against the 2025 Vermögen sheet
+npm run drive:formatting --workspace @quali/web# the whole 21-point 2025 Vermögen paper
 npm run drive:charts --workspace @quali/web     # inserting charts, against the 2026 pie task
 npm run drive:klima --workspace @quali/web      # rename, conditional formatting, row-wise chart
+npm run drive:formulabar --workspace @quali/web # editing in the formula bar
+npm run drive:sort --workspace @quali/web       # sorting, including the „nur die Namen" trap
 ```
 
 `npm run drive` expects the dev server to already be running. Set `SHOT_DIR` to choose where

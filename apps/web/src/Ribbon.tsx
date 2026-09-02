@@ -14,6 +14,17 @@ interface RibbonProps {
   onInsertChart: (kind: ChartKind) => void
   onConditionalFormat: (condition: CfRule['condition'], format: Partial<CellStyle>) => void
   onClearConditionalFormats: () => void
+  /** The columns of the current selection, so „Sortieren nach" can offer them by name. */
+  sortColumns: readonly SortColumn[]
+  onSort: (by: number, direction: 'asc' | 'desc') => void
+}
+
+export interface SortColumn {
+  /** Absolute column index, which is what the sort operation records. */
+  readonly index: number
+  readonly letter: string
+  /** The header above the selection, when there is one — „Name" reads better than „Spalte B". */
+  readonly header: string | null
 }
 
 const FONTS = ['Calibri', 'Aptos Narrow', 'Arial', 'Arial Black', 'Times New Roman', 'Courier New']
@@ -93,6 +104,8 @@ export function Ribbon({
   onInsertChart,
   onConditionalFormat,
   onClearConditionalFormats,
+  sortColumns,
+  onSort,
 }: RibbonProps) {
   const [menu, setMenu] = useState<string | null>(null)
   const toggle = (name: string) => setMenu((open) => (open === name ? null : name))
@@ -362,8 +375,91 @@ export function Ribbon({
             </button>
           )}
         </div>
+
+        <div className="rgroup">
+          <div className="split">
+            <button
+              className="tool wide"
+              title="Aufsteigend sortieren (A-Z)"
+              onClick={() => sortColumns[0] && onSort(sortColumns[0].index, 'asc')}
+            >
+              <SortIcon direction="asc" />
+            </button>
+            <button className="chev" title="Sortieren und Filtern" onClick={() => toggle('sort')}>⌄</button>
+            <Menu open={menu === 'sort'} onClose={close}>
+              <SortForm
+                columns={sortColumns}
+                onSort={(by, direction) => { onSort(by, direction); close() }}
+              />
+            </Menu>
+          </div>
+        </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * „Sortieren und Filtern" — Excel's Bearbeiten group, reduced to what the exam asks for.
+ *
+ * The column picker is what makes „Sortiere die Tabelle nach Infizierten absteigend" doable
+ * without selecting the wrong thing: the selection stays the whole table, and the key is chosen
+ * here rather than by which column happens to be leftmost.
+ */
+function SortForm({
+  columns,
+  onSort,
+}: {
+  columns: readonly SortColumn[]
+  onSort: (by: number, direction: 'asc' | 'desc') => void
+}) {
+  const [by, setBy] = useState<number | null>(null)
+  const key = by ?? columns[0]?.index ?? 0
+
+  if (columns.length === 0) return <p className="sort-hint">Markiere zuerst einen Bereich.</p>
+
+  return (
+    <div className="sort-form">
+      <label>
+        Sortieren nach
+        <select value={key} onChange={(event) => setBy(Number(event.target.value))}>
+          {columns.map((column) => (
+            <option key={column.index} value={column.index}>
+              {column.header ? `${column.header} (${column.letter})` : `Spalte ${column.letter}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="menu-item" onClick={() => onSort(key, 'asc')}>
+        Aufsteigend sortieren (A-Z)
+      </button>
+      <button className="menu-item" onClick={() => onSort(key, 'desc')}>
+        Absteigend sortieren (Z-A)
+      </button>
+      <p className="sort-hint">
+        Markiere immer die ganze Tabelle, sonst wandern die Zeilen auseinander.
+      </p>
+    </div>
+  )
+}
+
+function SortIcon({ direction }: { direction: 'asc' | 'desc' }) {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <text x="0" y="7" fontSize="6.5" fill="currentColor">
+        {direction === 'asc' ? 'A' : 'Z'}
+      </text>
+      <text x="0" y="15" fontSize="6.5" fill="currentColor">
+        {direction === 'asc' ? 'Z' : 'A'}
+      </text>
+      <path
+        d="M11.5 2v11m0 0l-2.2-2.4m2.2 2.4l2.2-2.4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </svg>
   )
 }
 

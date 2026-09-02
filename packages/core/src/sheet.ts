@@ -6,11 +6,18 @@
  */
 
 import { evaluateNode, type EvalScope } from './evaluate.ts'
-import { DEFAULT_STYLE, type Cell, type CellStyle, type CfRule, type ChartSpec } from './model.ts'
-import { ParseError, parseFormula, type Node } from './parser.ts'
+import {
+  DEFAULT_STYLE,
+  type Cell,
+  type CellStyle,
+  type CfRule,
+  type ChartSpec,
+  type SortSpec,
+} from './model.ts'
+import { ParseError, parseFormula, translateInput, type Node } from './parser.ts'
 import { TokenizeError } from './tokenizer.ts'
 import { expandRange, formatA1, parseA1, refKey, type CellRef, type RangeRef } from './refs.ts'
-import { err, type CellValue } from './values.ts'
+import { err, toText, type CellValue } from './values.ts'
 
 export function isFormulaInput(input: string): boolean {
   return input.trimStart().startsWith('=')
@@ -42,6 +49,8 @@ export class Sheet {
   readonly conditionalFormats: CfRule[] = []
   readonly charts: ChartSpec[] = []
   readonly merges: RangeRef[] = []
+  /** Every sort applied, in order — the log a submission carries so the server can replay it. */
+  readonly sorts: SortSpec[] = []
   readonly columnWidths = new Map<number, number>()
   readonly rowHeights = new Map<number, number>()
 
@@ -198,6 +207,59 @@ export class Sheet {
     if (index >= 0) this.merges.splice(index, 1)
   }
 
+  /**
+   * Sort the rows of a range by one column (skill S2).
+   *
+   * Whole rows move, which is the entire point of the exam task: a student who selects only the
+   * name column and sorts that has broken every record, and the checker says so. Formulas travel
+   * with their row and are translated by the distance the row moved, exactly as Excel does — so
+   * `=SUMME(C4:F4)` in a row that lands on row 7 becomes `=SUMME(C7:F7)`.
+   */
+  sortRows(spec: SortSpec): void {
+    const top = Math.min(spec.range.start.row, spec.range.end.row)
+    const bottom = Math.max(spec.range.start.row, spec.range.end.row)
+    const left = Math.min(spec.range.start.col, spec.range.end.col)
+    const right = Math.max(spec.range.start.col, spec.range.end.col)
+
+    const rows = []
+    for (let row = top; row <= bottom; row++) {
+      const cells: (Cell | undefined)[] = []
+      for (let col = left; col <= right; col++) {
+        cells.push(this.cells.get(refKey({ row, col, colAbs: false, rowAbs: false })))
+      }
+      rows.push({ row, cells, key: this.getValue({ row, col: spec.by, colAbs: false, rowAbs: false }) })
+    }
+
+    // `sort` is stable in every engine we target, so equal keys keep their relative order.
+    // Empty cells sink to the bottom in both directions, the way Excel sorts them.
+    const order = [...rows].sort((a, b) => {
+      const aBlank = a.key === null
+      const bBlank = b.key === null
+      if (aBlank || bBlank) return aBlank === bBlank ? 0 : aBlank ? 1 : -1
+      const cmp = compareKeys(a.key, b.key)
+      return spec.direction === 'desc' ? -cmp : cmp
+    })
+
+    order.forEach((source, index) => {
+      const row = top + index
+      const dRow = row - source.row
+      source.cells.forEach((cell, offset) => {
+        const key = refKey({ row, col: left + offset, colAbs: false, rowAbs: false })
+        if (!cell) {
+          this.cells.delete(key)
+          return
+        }
+        this.cells.set(key, {
+          input: dRow === 0 ? cell.input : translateInput(cell.input, dRow, 0),
+          style: cell.style,
+        })
+      })
+    })
+
+    this.sorts.push(spec)
+    this.invalidate()
+  }
+
   addChart(spec: ChartSpec): void {
     this.charts.push(spec)
   }
@@ -247,6 +309,28 @@ export class Sheet {
         formatA1(merge.end) === formatA1(range.end),
     )
   }
+}
+
+/**
+ * Excel's sort order for non-empty keys: numbers first, then text, then WAHR/FALSCH, then errors.
+ * Text compares with the German collator so „Ärger" lands next to „Arger" and not after „Zola".
+ */
+const COLLATOR = new Intl.Collator('de', { sensitivity: 'base', numeric: true })
+
+function sortRank(value: CellValue): number {
+  if (typeof value === 'number') return 0
+  if (typeof value === 'string') return 1
+  if (typeof value === 'boolean') return 2
+  return 3
+}
+
+function compareKeys(a: CellValue, b: CellValue): number {
+  const rankA = sortRank(a)
+  const rankB = sortRank(b)
+  if (rankA !== rankB) return rankA - rankB
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b)
+  return COLLATOR.compare(toText(a), toText(b))
 }
 
 function rangeContains(range: RangeRef, ref: CellRef): boolean {

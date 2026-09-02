@@ -7,6 +7,7 @@
 
 import {
   Sheet,
+  alsoAt,
   filledDown,
   hasAbsoluteRef,
   hasChart,
@@ -17,6 +18,7 @@ import {
   matchesSolution,
   numberFormatIs,
   sheetNamed,
+  sortedBy,
   usesFunction,
   usesOperator,
   valueEquals,
@@ -257,15 +259,18 @@ const vermoegen: Scenario = {
   rows: 15,
   seed() {
     const sheet = new Sheet('Tabelle1')
+    // The paper hands the family out in reverse alphabetical order — that is what makes task 6
+    // („Sortiere die Werte B4 - H8 nach Namen") an actual piece of work.
     sheet.load({
       B3: 'Name', C3: 'Sparschwein', D3: 'Bankkonto', E3: 'Geldbörse',
       F3: 'Sofaritze', G3: 'Gesamt', H3: 'Prozent',
-      B4: 'Arthur', C4: 30, D4: 434, E4: 8, F4: 0,
-      B5: 'Hannes', C5: 20, D5: 5232, E5: 221, F5: 0,
+      B4: 'Zola', C4: 0, D4: 0, E4: 0, F4: 100,
+      B5: 'Max', C5: 27, D5: 234, E5: 30, F5: 0,
       B6: 'Karin', C6: 14, D6: 1421, E6: 14, F6: 0,
-      B7: 'Max', C7: 27, D7: 234, E7: 30, F7: 0,
-      B8: 'Zola', C8: 0, D8: 0, E8: 0, F8: 100,
-      B15: 'Gesamtvermögen',
+      B7: 'Hannes', C7: 20, D7: 5232, E7: 221, F7: 0,
+      B8: 'Arthur', C8: 30, D8: 434, E8: 8, F8: 0,
+      B10: 'Sparschwein', B11: 'Bankkonto', B12: 'Geldbörse', B13: 'Sofaritze',
+      B15: 'Gesamt',
     })
     sheet.setStyle('B15', { bold: true })
     return sheet
@@ -276,7 +281,7 @@ const vermoegen: Scenario = {
       skills: ['F1', 'F2'],
       promptDe:
         'Verbinde und zentriere die Zellen B1 - H1 und beschrifte sie mit „Familienvermögen". ' +
-        'Wähle als Füllfarbe ein helles Blau.',
+        'Wähle als Füllfarbe der Zelle ein helles Blau.',
       target: 'B1',
       checks: [
         valueEquals('Familienvermögen'),
@@ -320,13 +325,47 @@ const vermoegen: Scenario = {
       points: 2,
     },
     {
+      id: 'verm-blattname',
+      skills: ['S1'],
+      promptDe: 'Benenne dieses Tabellenblatt um in „Vermögen".',
+      target: 'B3',
+      checks: [sheetNamed('Vermögen')],
+      points: 1,
+    },
+    {
+      id: 'verm-sortieren',
+      skills: ['S2'],
+      promptDe:
+        'Sortiere die Werte B4 - H8 nach Namen. Achtung: Markiere den ganzen Bereich, damit ' +
+        'jede Zeile zusammenbleibt.',
+      target: 'B4',
+      checks: [sortedBy('B4:H8', 'B', 'asc')],
+      points: 2,
+    },
+    {
+      id: 'verm-kategorien',
+      skills: ['N1'],
+      promptDe: 'Berechne in den Zellen C10 - C13 die Summen pro Kategorie.',
+      target: 'C10',
+      solution: '=SUMME(C4:C8)',
+      checks: [
+        isFormula(),
+        usesFunction('SUMME'),
+        matchesSolution(),
+        alsoAt('C11', '=SUMME(D4:D8)', isFormula(), usesFunction('SUMME'), matchesSolution()),
+        alsoAt('C12', '=SUMME(E4:E8)', isFormula(), usesFunction('SUMME'), matchesSolution()),
+        alsoAt('C13', '=SUMME(F4:F8)', isFormula(), usesFunction('SUMME'), matchesSolution()),
+      ],
+      points: 4,
+    },
+    {
       id: 'verm-gesamt',
       skills: ['N1'],
       promptDe: 'Berechne in Zelle C15 das gesamte Familienvermögen.',
       target: 'C15',
       solution: '=SUMME(G4:G8)',
       checks: [isFormula(), usesFunction('SUMME'), matchesSolution()],
-      points: 2,
+      points: 3,
     },
     {
       id: 'verm-prozent',

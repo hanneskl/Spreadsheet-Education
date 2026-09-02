@@ -175,6 +175,25 @@ cells the seed left empty. Without that, a crafted request could rewrite the sou
 and because the answer key is a formula evaluated against the same data, the key would move with
 them and any wrong answer would grade as correct.
 
+### Sorting is carried as an operation, not as data
+
+Re-seeding creates a problem for „Sortiere die Werte B4 - H8 nach Namen": the cells that have to
+move are exactly the ones the server refuses to take from the client. So a submission carries a
+**sort log** — „range B4:H8, key column 1, ascending" — which the server replays onto the freshly
+seeded sheet. The rows can then only ever be permuted, never rewritten, and a request claiming an
+already-sorted table changes nothing.
+
+The replay happens *before* the student's own inputs are placed, because the addresses a
+submission records are already post-sort. The consequence is a constraint on scenarios: **a sort
+task must never sort by a column the student computes.** Every sort task in the seven-year corpus
+sorts seeded data (names, Infizierte, Umsätze), so this costs us nothing today.
+
+Sorting whole rows is also where the checker earns its keep. The UI lets a student select one
+column and sort it alone — the mistake the self-learning tool baits with „Sortiere **NUR** die
+Namen alphabetisch" — because forbidding it would remove the thing being taught. `sortedBy`
+compares the student's rows against the pristine seed and says which row no longer belongs
+together.
+
 ## 7. Build order
 
 1. ~~**Model + evaluator + checker, headless.**~~ Done. Tested against the `Lösung` files: it

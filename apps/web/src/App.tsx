@@ -1,5 +1,6 @@
 import {
   DEFAULT_STYLE,
+  colToLetters,
   formatValue,
   translateInput,
   type CellStyle,
@@ -282,6 +283,42 @@ export function App() {
     touch()
   }
 
+  /**
+   * Sort the selected rows by one of its columns (skill S2).
+   *
+   * Excel sorts whatever you selected, and so do we — including the case where a student
+   * selected a single column and is about to scramble the table. That mistake has to be
+   * possible, otherwise the check that catches it teaches nothing.
+   */
+  function sortSelection(by: number, direction: 'asc' | 'desc'): void {
+    sheet.sortRows({
+      range: {
+        start: { row: rect.top, col: rect.left, colAbs: false, rowAbs: false },
+        end: { row: rect.bottom, col: rect.right, colAbs: false, rowAbs: false },
+      },
+      by,
+      direction,
+    })
+    touch()
+  }
+
+  /**
+   * The selection's columns, labelled by the header sitting above them where there is one.
+   * „Name (B)" is what a student is looking for; „Spalte B" is what they get otherwise.
+   */
+  const sortColumns = useMemo(() => {
+    const columns = []
+    for (let col = rect.left; col <= rect.right; col++) {
+      const above = rect.top > 0 ? sheet.getValue(toA1({ row: rect.top - 1, col })) : null
+      columns.push({
+        index: col,
+        letter: colToLetters(col),
+        header: typeof above === 'string' && above.trim() !== '' ? above.trim() : null,
+      })
+    }
+    return columns
+  }, [sheet, rect.left, rect.right, rect.top, revision])
+
   /** Insert a chart reading the current selection — Excel's "Einfügen → Diagramm". */
   function insertChart(kind: ChartKind): void {
     sheet.addChart({
@@ -321,6 +358,8 @@ export function App() {
       merges: serialiseMerges(sheet),
       charts: [...sheet.charts],
       conditionalFormats: [...sheet.conditionalFormats],
+      // The sort log, not the sorted data — the server replays it onto a fresh seed.
+      sorts: [...sheet.sorts],
       sheetName: sheet.name,
     }
   }
@@ -398,6 +437,8 @@ export function App() {
             onInsertChart={insertChart}
             onConditionalFormat={addConditionalFormat}
             onClearConditionalFormats={() => { sheet.clearConditionalFormats(); touch() }}
+            sortColumns={sortColumns}
+            onSort={sortSelection}
           />
           <div className="formula-bar">
             <span className="address">{rectLabel(rect)}</span>

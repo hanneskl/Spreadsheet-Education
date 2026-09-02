@@ -24,6 +24,13 @@ export interface TaskContext {
   readonly target: string
   /** The task's solution, as a formula. The expected value is derived from it, never stored. */
   readonly solution?: string
+  /**
+   * The scenario as it was handed out, before the student touched it.
+   *
+   * Needed by checks that must know what the source data looked like — `sortedBy` compares the
+   * student's rows against these to prove the records stayed intact.
+   */
+  readonly pristine?: Sheet
 }
 
 export type Check = (ctx: TaskContext) => CheckResult
@@ -267,11 +274,102 @@ export function sheetNamed(expected: string): Check {
       : fail(`Das Tabellenblatt heißt „${sheet.name}" statt „${expected}".`)
 }
 
+/**
+ * The rows of a range must be sorted by one column — and must still be the same rows (skill S2).
+ *
+ * The second half is the whole lesson. „Sortiere die Werte B4 - H8 nach Namen" is failed just as
+ * badly by a student who selects only the name column and sorts that: the names come out
+ * alphabetical and every balance now belongs to the wrong person. So we check the ordering *and*
+ * that each seeded row survived as a unit.
+ *
+ * Only columns the scenario seeded are compared — the student's own formula columns are expected
+ * to appear where the pristine sheet has nothing.
+ */
+export function sortedBy(range: string, by: string, direction: 'asc' | 'desc' = 'asc'): Check {
+  return ({ sheet, pristine }) => {
+    const parsed = parseRangeText(range)
+    if (!parsed) throw new Error(`Ungültiger Bereich „${range}".`)
+    const keyRef = parseA1(`${by}1`)
+    if (!keyRef) throw new Error(`Ungültige Spalte „${by}".`)
+
+    const top = Math.min(parsed.start.row, parsed.end.row)
+    const bottom = Math.max(parsed.start.row, parsed.end.row)
+    const left = Math.min(parsed.start.col, parsed.end.col)
+    const right = Math.max(parsed.start.col, parsed.end.col)
+    const at = (row: number, col: number) => ({ row, col, colAbs: false, rowAbs: false })
+
+    // 1. The key column is in order.
+    for (let row = top; row < bottom; row++) {
+      const here = sheet.getValue(at(row, keyRef.col))
+      const next = sheet.getValue(at(row + 1, keyRef.col))
+      if (here === null || next === null) continue
+      const cmp = compareForSort(here, next)
+      const ordered = direction === 'asc' ? cmp <= 0 : cmp >= 0
+      if (!ordered) {
+        const how = direction === 'asc' ? 'aufsteigend (A-Z)' : 'absteigend (Z-A)'
+        return fail(
+          `Die Zeilen ${top + 1} bis ${bottom + 1} sind noch nicht nach Spalte ${by} ${how} ` +
+            `sortiert: „${toText(next)}" steht unter „${toText(here)}".`,
+        )
+      }
+    }
+
+    // 2. Every seeded row is still intact.
+    if (pristine) {
+      const seededCols: number[] = []
+      for (let col = left; col <= right; col++) {
+        for (let row = top; row <= bottom; row++) {
+          if (pristine.getInput(at(row, col)) !== '') { seededCols.push(col); break }
+        }
+      }
+      const rowText = (source: Sheet, row: number) =>
+        seededCols.map((col) => toText(source.getValue(at(row, col)))).join(' ')
+
+      const wanted = new Set<string>()
+      for (let row = top; row <= bottom; row++) wanted.add(rowText(pristine, row))
+      for (let row = top; row <= bottom; row++) {
+        if (wanted.has(rowText(sheet, row))) continue
+        return fail(
+          `Zeile ${row + 1} passt nicht mehr zusammen. Beim Sortieren muss die ganze Zeile ` +
+            `mitwandern — markiere ${range} und nicht nur eine einzelne Spalte.`,
+        )
+      }
+    }
+
+    return OK
+  }
+}
+
+/** Same ordering the sheet sorts by, so the check and the operation can never disagree. */
+function compareForSort(a: CellValue, b: CellValue): number {
+  if (typeof a === 'number' && typeof b === 'number') return a - b
+  if (typeof a === 'number') return -1
+  if (typeof b === 'number') return 1
+  return toText(a).localeCompare(toText(b), 'de', { sensitivity: 'base', numeric: true })
+}
+
 export function isMerged(range: string): Check {
   return ({ sheet }) => {
     const parsed = parseRangeText(range)
     if (!parsed) throw new Error(`Ungültiger Bereich „${range}".`)
     return sheet.isMerged(parsed) ? OK : fail(`Die Zellen ${range} sind noch nicht verbunden.`)
+  }
+}
+
+/**
+ * Run checks against a different cell, with its own answer key.
+ *
+ * Exam tasks routinely name several cells at once — „Berechne in den Zellen C10 - C13 die Summen
+ * pro Kategorie" is one task worth four points whose four cells each need a different formula.
+ * This keeps that a single task instead of four, so the point total still matches the paper.
+ */
+export function alsoAt(a1: string, solution: string, ...checks: readonly Check[]): Check {
+  return (ctx) => {
+    for (const check of checks) {
+      const result = check({ ...ctx, target: a1, solution })
+      if (!result.passed) return result
+    }
+    return OK
   }
 }
 

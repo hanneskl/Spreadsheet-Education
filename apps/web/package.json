@@ -13,6 +13,8 @@
     "drive:formatting": "node scripts/drive-formatting.mjs",
     "drive:charts": "node scripts/drive-charts.mjs",
     "drive:klima": "node scripts/drive-klima.mjs",
+    "drive:formulabar": "node scripts/drive-formulabar.mjs",
+    "drive:sort": "node scripts/drive-sort.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

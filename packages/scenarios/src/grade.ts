@@ -15,6 +15,7 @@ import {
   type CfRule,
   type ChartSpec,
   type RangeRef,
+  type SortSpec,
 } from '@quali/core'
 import { scenarioById, type Scenario, type TaskDef } from './index.ts'
 
@@ -33,6 +34,13 @@ export interface Submission {
   readonly merges?: readonly string[]
   readonly conditionalFormats?: readonly CfRule[]
   readonly charts?: readonly ChartSpec[]
+  /**
+   * The sorts the student applied, in order (skill S2).
+   *
+   * Carried as operations rather than as reordered data: the server replays them onto the
+   * freshly seeded sheet, so the source rows can only ever be permuted, never rewritten.
+   */
+  readonly sorts?: readonly SortSpec[]
   /** The tab name, which the student can rename — skill S1, in six of seven exam years. */
   readonly sheetName?: string
   /** Per-student data randomisation. Reserved; scenarios are not yet randomised. */
@@ -64,6 +72,14 @@ export function taskById(scenario: Scenario, taskId: string): TaskDef {
 export function rebuildSheet(scenario: Scenario, submission: Omit<Submission, 'scenarioId' | 'taskId'>): Sheet {
   const sheet = scenario.seed()
   const seeded = new Set(sheet.populatedCells())
+
+  // Sorts are replayed before the student's own cells go in, because their recorded addresses
+  // are already the post-sort ones. A scenario must therefore never ask to sort by a column the
+  // student computes — every sort task in the corpus sorts seeded data, which is what this
+  // assumes.
+  for (const sort of submission.sorts ?? []) {
+    sheet.sortRows(sort)
+  }
 
   for (const [a1, input] of Object.entries(submission.inputs)) {
     if (seeded.has(a1.toUpperCase())) continue
@@ -108,6 +124,7 @@ export function gradeSubmission(submission: Submission): Grade {
     sheet,
     target: task.target,
     solution: task.solution,
+    pristine: scenario.seed(),
   })
 
   return {
