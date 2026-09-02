@@ -253,3 +253,30 @@ select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; ba
 .chart-controls select { font-size: 11px; padding: 3px 4px;
   border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .chart-controls .drop { border-color: #f0c4c0; color: var(--bad); }
+
+/* conditional-formatting rule builder */
+.cf-form { display: flex; flex-direction: column; gap: 6px; width: 210px; padding: 4px; }
+.cf-form select, .cf-form input {
+  padding: 5px 6px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px;
+  background: #fff; width: 100%;
+}
+.cf-values { display: flex; gap: 6px; }
+.cf-apply { background: var(--accent); color: #fff; text-align: center; }
+.cf-apply:hover { background: #175c33; }
+
+/* editable sheet tab */
+.tab-input {
+  padding: 4px 10px; font-size: 12px; font-weight: 600; width: 130px;
+  border: 1px solid var(--accent); border-radius: 4px 4px 0 0;
+}
+
+/* crash screen — the last line of defence against a white page */
+.crash { max-width: 620px; margin: 60px auto; padding: 24px; }
+.crash h1 { font-size: 20px; margin: 0 0 8px; }
+.crash p { color: #5b6169; margin: 0 0 16px; }
+.crash details { margin-top: 18px; font-size: 12px; }
+.crash summary { cursor: pointer; color: #5b6169; }
+.crash pre {
+  margin-top: 8px; padding: 10px; background: #f6f6f6; border: 1px solid var(--line);
+  border-radius: 4px; overflow: auto; white-space: pre-wrap; font-size: 11px;
+}

@@ -216,6 +216,10 @@ export class Sheet {
     this.conditionalFormats.push(rule)
   }
 
+  clearConditionalFormats(): void {
+    this.conditionalFormats.length = 0
+  }
+
   /**
    * The style a cell actually renders with: its own formatting, then any conditional rule
    * whose condition its current value satisfies, applied in the order the rules were added.

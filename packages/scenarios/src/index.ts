@@ -10,11 +10,13 @@ import {
   filledDown,
   hasAbsoluteRef,
   hasChart,
+  hasConditionalFormat,
   hasStyle,
   isFormula,
   isMerged,
   matchesSolution,
   numberFormatIs,
+  sheetNamed,
   usesFunction,
   usesOperator,
   valueEquals,
@@ -347,7 +349,144 @@ const vermoegen: Scenario = {
   ],
 }
 
-export const SCENARIOS: readonly Scenario[] = [smvWahl, felderBerechnen, vermoegen]
+/* -------------------------------------------------------------------------- */
+/* Klima — Quali 2022, Prüfungsteil Datenverarbeitung, Blatt 1                 */
+/* Real data and real task wording. Niederschlag totals 939 l/m², the mean     */
+/* temperature is 9,7 °C, the highest 19 °C and the lowest rainfall 58 l/m².   */
+/* -------------------------------------------------------------------------- */
+
+const MONTHS = [
+  'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+  'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+]
+const RAIN = [66, 58, 62, 70, 90, 112, 101, 101, 72, 61, 70, 76]
+const TEMP = [2.6, 4.4, 5.1, 7.8, 10.7, 19, 18.3, 16.4, 15.2, 9.6, 4.7, 2.6]
+
+const klima: Scenario = {
+  id: 'klima',
+  titleDe: 'Klima',
+  subtitleDe: 'Quali 2022 · Datenverarbeitung · Blatt 1',
+  columns: 13,
+  rows: 13,
+  seed() {
+    const sheet = new Sheet('Tabelle1')
+    const data: Record<string, string | number> = {
+      A3: 'Niederschlag in l/m²',
+      A4: 'Temperatur in °C',
+      A9: 'Niederschlag gesamt',
+      A10: 'Durchschnittstemperatur',
+      A11: 'Höchste Temperatur',
+      A12: 'Geringster Niederschlag',
+    }
+    MONTHS.forEach((month, index) => {
+      const col = String.fromCharCode(66 + index)
+      data[`${col}2`] = month
+      data[`${col}3`] = RAIN[index]!
+      data[`${col}4`] = TEMP[index]!
+    })
+    sheet.load(data)
+    for (const a1 of ['A3', 'A4', 'A9', 'A10', 'A11', 'A12']) sheet.setStyle(a1, { bold: true })
+    for (let index = 0; index < MONTHS.length; index++) {
+      sheet.setStyle(`${String.fromCharCode(66 + index)}2`, { bold: true, hAlign: 'center' })
+    }
+    return sheet
+  },
+  tasks: [
+    {
+      id: 'klima-blattname',
+      skills: ['S1'],
+      promptDe: 'Benenne das Registerblatt um in „Klima". (Doppelklick auf den Reiter)',
+      target: 'A1',
+      checks: [sheetNamed('Klima')],
+      points: 1,
+    },
+    {
+      id: 'klima-titel',
+      skills: ['F1'],
+      promptDe:
+        'Verbinde und zentriere die Zellen A1 - M1 und füge dort die Überschrift „Klima 2022" ein.',
+      target: 'A1',
+      checks: [
+        valueEquals('Klima 2022'),
+        isMerged('A1:M1'),
+        hasStyle({ hAlign: 'center' }, 'A1'),
+      ],
+      points: 1,
+    },
+    {
+      id: 'klima-niederschlag-gesamt',
+      skills: ['N1'],
+      promptDe: 'Berechne in B9 den gesamten Niederschlag des Jahres.',
+      target: 'B9',
+      solution: '=SUMME(B3:M3)',
+      checks: [isFormula(), usesFunction('SUMME'), matchesSolution()],
+      points: 1,
+    },
+    {
+      id: 'klima-durchschnitt',
+      skills: ['N2'],
+      promptDe: 'Berechne in B10 die Durchschnittstemperatur.',
+      target: 'B10',
+      solution: '=MITTELWERT(B4:M4)',
+      checks: [isFormula(), usesFunction('MITTELWERT'), matchesSolution()],
+      points: 1,
+    },
+    {
+      id: 'klima-max',
+      skills: ['N3'],
+      promptDe: 'Berechne in B11 die höchste Temperatur.',
+      target: 'B11',
+      solution: '=MAX(B4:M4)',
+      checks: [isFormula(), usesFunction('MAX'), matchesSolution()],
+      points: 1,
+    },
+    {
+      id: 'klima-min',
+      skills: ['N4'],
+      promptDe: 'Berechne in B12 den geringsten Niederschlag.',
+      target: 'B12',
+      solution: '=MIN(B3:M3)',
+      checks: [isFormula(), usesFunction('MIN'), matchesSolution()],
+      points: 1,
+    },
+    {
+      id: 'klima-kalt',
+      skills: ['F17'],
+      promptDe:
+        'Formatiere die Temperaturen B4 - M4 mit einer bedingten Formatierung: Wenn die ' +
+        'Temperatur unter 5 °C liegt, soll die Zelle einen blauen Hintergrund bekommen.',
+      target: 'B4',
+      checks: [
+        hasConditionalFormat('B4:M4', { kind: 'lessThan', value: 5 }, { fill: PALETTE.hellblau }),
+      ],
+      points: 1,
+    },
+    {
+      id: 'klima-warm',
+      skills: ['F17'],
+      promptDe:
+        'Ergänze eine zweite Regel für B4 - M4: Wenn die Temperatur über 15 °C liegt, soll ' +
+        'die Zelle einen roten Hintergrund bekommen.',
+      target: 'B4',
+      checks: [
+        hasConditionalFormat('B4:M4', { kind: 'greaterThan', value: 15 }, { fill: PALETTE.rot }),
+      ],
+      points: 1,
+    },
+    {
+      id: 'klima-diagramm',
+      skills: ['D3', 'D6'],
+      promptDe:
+        'Erstelle ein Kreisdiagramm, in dem der Niederschlag pro Monat angegeben ist ' +
+        '(Bereich B2:M3).',
+      target: 'B2',
+      checks: [hasChart({ kind: 'pie', source: 'B2:M3' })],
+      points: 2,
+    },
+  ],
+}
+
+export const SCENARIOS: readonly Scenario[] = [smvWahl, felderBerechnen, vermoegen, klima]
 
 export function scenarioById(id: string): Scenario {
   const found = SCENARIOS.find((scenario) => scenario.id === id)

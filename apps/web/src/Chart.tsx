@@ -19,8 +19,11 @@ export interface ChartData {
 
 /**
  * Read a chart's data out of its source range.
- * Two or more columns: the first holds the labels, the second the values — the shape every
- * chart task in the corpus uses. A single column is values with 1..n as labels.
+ *
+ * Orientation is inferred the way Excel infers it: a range taller than it is wide runs down
+ * columns (labels left, values right); a wider one runs along rows (labels on the first row,
+ * values on the second). The 2022 Klima sheet lays its months out across a row, so both
+ * shapes appear in the corpus.
  */
 export function readChartData(sheet: Sheet, spec: ChartSpec): ChartData {
   const left = Math.min(spec.source.start.col, spec.source.end.col)
@@ -30,12 +33,27 @@ export function readChartData(sheet: Sheet, spec: ChartSpec): ChartData {
 
   const labels: string[] = []
   const values: number[] = []
+  const cell = (row: number, col: number) => ({ row, col, colAbs: false, rowAbs: false })
+
+  if (right - left > bottom - top) {
+    // Row-oriented: months across the top, the series underneath.
+    const labelRow = bottom > top ? top : null
+    const valueRow = bottom > top ? top + 1 : top
+    for (let col = left; col <= right; col++) {
+      const value = sheet.getValue(cell(valueRow, col))
+      if (typeof value !== 'number') continue
+      labels.push(labelRow === null ? String(col - left + 1) : toText(sheet.getValue(cell(labelRow, col))))
+      values.push(value)
+    }
+    return { labels, values }
+  }
+
   for (let row = top; row <= bottom; row++) {
-    const labelCell = right > left ? { row, col: left, colAbs: false, rowAbs: false } : null
-    const valueCell = { row, col: right > left ? left + 1 : left, colAbs: false, rowAbs: false }
-    const value = sheet.getValue(valueCell)
+    const labelCol = right > left ? left : null
+    const valueCol = right > left ? left + 1 : left
+    const value = sheet.getValue(cell(row, valueCol))
     if (typeof value !== 'number') continue
-    labels.push(labelCell ? toText(sheet.getValue(labelCell)) : String(row - top + 1))
+    labels.push(labelCol === null ? String(row - top + 1) : toText(sheet.getValue(cell(row, labelCol))))
     values.push(value)
   }
   return { labels, values }

@@ -3,6 +3,7 @@ import {
   formatValue,
   translateInput,
   type CellStyle,
+  type CfRule,
   type ChartKind,
   type NumberFormat,
   type Sheet,
@@ -72,6 +73,7 @@ export function App() {
   const [edit, setEdit] = useState<EditState | null>(null)
   const [clipboard, setClipboard] = useState<Clipboard | null>(null)
   const [states, setStates] = useState<Record<string, TaskState>>({})
+  const [renamingTab, setRenamingTab] = useState(false)
   const [signedIn, setSignedIn] = useState(false)
   const [authReady, setAuthReady] = useState(!hasBackend)
 
@@ -264,6 +266,22 @@ export function App() {
     end: { row: rect.bottom, col: rect.right, colAbs: false, rowAbs: false },
   })
 
+  /** Apply a conditional-formatting rule over the current selection (skills F16–F18). */
+  function addConditionalFormat(
+    condition: CfRule['condition'],
+    format: Partial<CellStyle>,
+  ): void {
+    sheet.addConditionalFormat({
+      range: {
+        start: { row: rect.top, col: rect.left, colAbs: false, rowAbs: false },
+        end: { row: rect.bottom, col: rect.right, colAbs: false, rowAbs: false },
+      },
+      condition,
+      format,
+    })
+    touch()
+  }
+
   /** Insert a chart reading the current selection — Excel's "Einfügen → Diagramm". */
   function insertChart(kind: ChartKind): void {
     sheet.addChart({
@@ -285,7 +303,7 @@ export function App() {
    * Formatting has to travel with the inputs — without it no style check can pass, and the
    * cells a formatting task targets are often ones the scenario seeded.
    */
-  function currentWork(): Pick<Submission, 'inputs' | 'styles' | 'merges' | 'charts'> {
+  function currentWork(): Omit<Submission, 'scenarioId' | 'taskId'> {
     const inputs: Record<string, string> = {}
     for (const a1 of sheet.populatedCells()) inputs[a1] = sheet.getInput(a1)
 
@@ -297,7 +315,14 @@ export function App() {
         if (style !== DEFAULT_STYLE) styles[a1] = style
       }
     }
-    return { inputs, styles, merges: serialiseMerges(sheet), charts: [...sheet.charts] }
+    return {
+      inputs,
+      styles,
+      merges: serialiseMerges(sheet),
+      charts: [...sheet.charts],
+      conditionalFormats: [...sheet.conditionalFormats],
+      sheetName: sheet.name,
+    }
   }
 
   /**
@@ -371,6 +396,8 @@ export function App() {
             onMerge={toggleMerge}
             isMerged={mergedNow}
             onInsertChart={insertChart}
+            onConditionalFormat={addConditionalFormat}
+            onClearConditionalFormats={() => { sheet.clearConditionalFormats(); touch() }}
           />
           <div className="formula-bar">
             <span className="address">{rectLabel(rect)}</span>
@@ -378,24 +405,27 @@ export function App() {
               className="formula-input"
               value={barValue}
               placeholder="Formel eingeben, z. B. =SUMME(B2:B6)"
-              onChange={(event) =>
+              onChange={(event) => {
+                // React clears `currentTarget` once the handler returns, and a functional
+                // updater runs later — so every DOM read has to happen here, not inside it.
+                const draft = event.target.value
+                const caret = event.target.selectionStart ?? draft.length
                 setEdit((previous) =>
                   stopPointing({
                     a1: previous?.a1 ?? activeA1,
-                    draft: event.target.value,
-                    caret: event.target.selectionStart ?? event.target.value.length,
+                    draft,
+                    caret,
                     from: 'bar',
                     point: previous?.point ?? null,
                   }),
                 )
-              }
-              onSelect={(event) =>
+              }}
+              onSelect={(event) => {
+                const caret = event.currentTarget.selectionStart
                 setEdit((previous) =>
-                  previous
-                    ? { ...previous, caret: event.currentTarget.selectionStart ?? previous.caret }
-                    : previous,
+                  previous ? { ...previous, caret: caret ?? previous.caret } : previous,
                 )
-              }
+              }}
               onKeyDown={(event) => {
                 if (edit) {
                   const pointed = handlePointKey(
@@ -426,7 +456,26 @@ export function App() {
               }}
             />
           </div>
-          <div className="tab">{sheet.name}</div>
+          {renamingTab ? (
+            <input
+              className="tab-input"
+              autoFocus
+              defaultValue={sheet.name}
+              onBlur={(event) => { sheet.name = event.target.value.trim() || sheet.name; setRenamingTab(false); touch() }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+                if (event.key === 'Escape') setRenamingTab(false)
+              }}
+            />
+          ) : (
+            <div
+              className="tab"
+              title="Doppelklick zum Umbenennen"
+              onDoubleClick={() => setRenamingTab(true)}
+            >
+              {sheet.name}
+            </div>
+          )}
           <Grid
             sheet={sheet}
             columns={scenario.columns}

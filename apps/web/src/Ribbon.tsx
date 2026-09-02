@@ -1,4 +1,4 @@
-import type { BorderWeight, CellStyle, ChartKind, NumberFormat } from '@quali/core'
+import type { BorderWeight, CellStyle, CfRule, ChartKind, NumberFormat } from '@quali/core'
 import { useEffect, useRef, useState } from 'react'
 
 export type BorderPreset = 'all' | 'outer' | 'thickOuter' | 'none'
@@ -12,6 +12,8 @@ interface RibbonProps {
   onMerge: () => void
   isMerged: boolean
   onInsertChart: (kind: ChartKind) => void
+  onConditionalFormat: (condition: CfRule['condition'], format: Partial<CellStyle>) => void
+  onClearConditionalFormats: () => void
 }
 
 const FONTS = ['Calibri', 'Aptos Narrow', 'Arial', 'Arial Black', 'Times New Roman', 'Courier New']
@@ -89,6 +91,8 @@ export function Ribbon({
   onMerge,
   isMerged,
   onInsertChart,
+  onConditionalFormat,
+  onClearConditionalFormats,
 }: RibbonProps) {
   const [menu, setMenu] = useState<string | null>(null)
   const toggle = (name: string) => setMenu((open) => (open === name ? null : name))
@@ -299,6 +303,25 @@ export function Ribbon({
 
         <div className="rgroup">
           <div className="split">
+            <button
+              className="tool wide"
+              title="Bedingte Formatierung"
+              onClick={() => toggle('cf')}
+            >
+              <CfIcon />
+            </button>
+            <button className="chev" title="Regel wählen" onClick={() => toggle('cf')}>⌄</button>
+            <Menu open={menu === 'cf'} onClose={close}>
+              <CfForm
+                onApply={(condition, format) => { onConditionalFormat(condition, format); close() }}
+                onClear={() => { onClearConditionalFormats(); close() }}
+              />
+            </Menu>
+          </div>
+        </div>
+
+        <div className="rgroup">
+          <div className="split">
             <button className="tool wide" title="Diagramm einfügen" onClick={() => onInsertChart('column')}>
               <ChartIcon />
             </button>
@@ -405,6 +428,85 @@ function FontColourIcon({ colour }: { colour: string }) {
     <svg viewBox="0 0 16 18" className="ico tallico" aria-hidden>
       <text x="8" y="11" textAnchor="middle" className="bigA">A</text>
       <rect x="1" y="14" width="14" height="3.2" fill={colour} stroke="#9ca3af" strokeWidth="0.6" />
+    </svg>
+  )
+}
+
+/**
+ * The rule builder. Students set a threshold and a colour, which is the whole of what the
+ * exam asks for („Wenn die Temperatur unter 5°C soll die Zelle einen blauen Hintergrund
+ * bekommen"), and far less than Excel's own dialog.
+ */
+function CfForm({
+  onApply,
+  onClear,
+}: {
+  onApply: (condition: CfRule['condition'], format: Partial<CellStyle>) => void
+  onClear: () => void
+}) {
+  const [kind, setKind] = useState<CfRule['condition']['kind']>('greaterThan')
+  const [first, setFirst] = useState('')
+  const [second, setSecond] = useState('')
+  const [paint, setPaint] = useState<'fill' | 'color'>('fill')
+  const [colour, setColour] = useState('#cfe2f3')
+
+  const number = (text: string) => Number(text.replace(',', '.'))
+
+  function apply(): void {
+    const condition: CfRule['condition'] =
+      kind === 'between'
+        ? { kind: 'between', min: number(first), max: number(second) }
+        : kind === 'equalText'
+          ? { kind: 'equalText', text: first }
+          : kind === 'lessThan'
+            ? { kind: 'lessThan', value: number(first) }
+            : { kind: 'greaterThan', value: number(first) }
+    onApply(condition, paint === 'fill' ? { fill: colour } : { color: colour })
+  }
+
+  return (
+    <div className="cf-form">
+      <select value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
+        <option value="greaterThan">Größer als</option>
+        <option value="lessThan">Kleiner als</option>
+        <option value="between">Zwischen</option>
+        <option value="equalText">Text gleich</option>
+      </select>
+      <div className="cf-values">
+        <input value={first} onChange={(e) => setFirst(e.target.value)} placeholder="Wert" />
+        {kind === 'between' && (
+          <input value={second} onChange={(e) => setSecond(e.target.value)} placeholder="bis" />
+        )}
+      </div>
+      <select value={paint} onChange={(event) => setPaint(event.target.value as 'fill' | 'color')}>
+        <option value="fill">Hintergrund färben</option>
+        <option value="color">Schrift färben</option>
+      </select>
+      <div className="swatches">
+        {(paint === 'fill' ? FILLS.filter(([, v]) => v !== 'none') : FONT_COLOURS).map(
+          ([label, value]) => (
+            <button
+              key={value}
+              className={colour === value ? 'swatch on' : 'swatch'}
+              style={{ background: value }}
+              title={label}
+              onClick={() => setColour(value)}
+            />
+          ),
+        )}
+      </div>
+      <button className="menu-item cf-apply" onClick={apply}>Regel übernehmen</button>
+      <button className="menu-item" onClick={onClear}>Regeln löschen</button>
+    </div>
+  )
+}
+
+function CfIcon() {
+  return (
+    <svg viewBox="0 0 18 16" className="ico" aria-hidden>
+      <rect x="1.5" y="2.5" width="7" height="11" fill="#cfe2f3" stroke="#3d4450" />
+      <rect x="9.5" y="2.5" width="7" height="11" fill="#f4cccc" stroke="#3d4450" />
+      <line x1="9" y1="2.5" x2="9" y2="13.5" />
     </svg>
   )
 }

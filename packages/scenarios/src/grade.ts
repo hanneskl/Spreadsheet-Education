@@ -33,6 +33,8 @@ export interface Submission {
   readonly merges?: readonly string[]
   readonly conditionalFormats?: readonly CfRule[]
   readonly charts?: readonly ChartSpec[]
+  /** The tab name, which the student can rename — skill S1, in six of seven exam years. */
+  readonly sheetName?: string
   /** Per-student data randomisation. Reserved; scenarios are not yet randomised. */
   readonly seed?: number
 }
@@ -80,6 +82,7 @@ export function rebuildSheet(scenario: Scenario, submission: Omit<Submission, 's
   for (const chart of submission.charts ?? []) {
     sheet.addChart(chart)
   }
+  if (submission.sheetName) sheet.name = submission.sheetName
   return sheet
 }
 

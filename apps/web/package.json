@@ -12,6 +12,7 @@
     "drive:switching": "node scripts/drive-switching.mjs",
     "drive:formatting": "node scripts/drive-formatting.mjs",
     "drive:charts": "node scripts/drive-charts.mjs",
+    "drive:klima": "node scripts/drive-klima.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

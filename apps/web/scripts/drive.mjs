@@ -86,7 +86,7 @@ await shot('06-all-passed')
 console.log('   score:', (await page.locator('.score').textContent())?.trim())
 
 console.log('8. second scenario — Felder berechnen')
-await page.locator('select').selectOption('felder-berechnen')
+await page.locator('select').first().selectOption('felder-berechnen')
 await page.waitForTimeout(200)
 await shot('07-felder-berechnen')
 
